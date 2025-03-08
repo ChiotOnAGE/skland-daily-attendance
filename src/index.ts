@@ -63,14 +63,15 @@ export async function doAttendanceForAccount(token: string, options: Options) {
   const [combineMessage, excutePushMessage, addMessage] = createCombinePushMessage()
 
   addMessage('## 明日方舟签到')
-  let successAttendance = 0
+  let successCnt = 0
+  let finishedCnt = 0
   const characterList = list
     .filter(item => item.appName === "明日方舟")
     .map(i => i.bindingList)
     .flat();
   const maxRetries = parseInt(process.env.MAX_RETRIES, 10) || 3 // 添加最大重试次数
-  await Promise.all(characterList.map(async (character) => {
-    console.log(`将签到第${successAttendance + 1}个角色`)
+  await Promise.all(characterList.map(async (character, index) => {
+    console.log(`将签到第${index + 1}个角色：${character.nickName}`)
     let retries = 0 // 初始化重试计数器
     while (retries < maxRetries) {
       try {
@@ -80,25 +81,25 @@ export async function doAttendanceForAccount(token: string, options: Options) {
         })
         if (data) {
           if (data.code === 0 && data.message === 'OK') {
-            const msg = `${(Number(character.channelMasterId) - 1) ? 'B 服' : '官服'}角色 ${successAttendance + 1} 签到成功${`, 获得了${data.data.awards.map(a => `「${a.resource.name}」${a.count}个`).join(',')}`}`
+            const msg = `角色【${character.nickName}】(${(Number(character.channelMasterId) - 1) ? 'B 服' : '官服'})签到成功${`, 获得了${data.data.awards.map(a => `「${a.resource.name}」${a.count}个`).join(',')}`}`
             combineMessage(msg)
-            successAttendance++
+            successCnt++
             break // 签到成功，跳出重试循环
           }
           else {
-            const msg = `${(Number(character.channelMasterId) - 1) ? 'B 服' : '官服'}角色 ${successAttendance + 1} 签到失败${`, 错误消息: ${data.message}\n\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``}`
+            const msg = `角色【${character.nickName}】(${(Number(character.channelMasterId) - 1) ? 'B 服' : '官服'})签到失败${`, 错误消息: ${data.message}\n\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``}`
             combineMessage(msg, true)
             retries++ // 签到失败，增加重试计数器
           }
         }
         else {
-          combineMessage(`${(Number(character.channelMasterId) - 1) ? 'B 服' : '官服'}角色 ${successAttendance + 1} 今天已经签到过了`)
+          combineMessage(`角色【${character.nickName}】(${(Number(character.channelMasterId) - 1) ? 'B 服' : '官服'})今天已经签到过了`)
           break // 已经签到过，跳出重试循环
         }
       }
       catch (error: any) {
         if (error.response && error.response.status === 403) {
-          combineMessage(`${(Number(character.channelMasterId) - 1) ? 'B 服' : '官服'}角色 ${successAttendance + 1} 今天已经签到过了`)
+          combineMessage(`角色【${character.nickName}】(${(Number(character.channelMasterId) - 1) ? 'B 服' : '官服'})今天已经签到过了`)
           break // 已经签到过，跳出重试循环
         }
         else {
@@ -106,6 +107,7 @@ export async function doAttendanceForAccount(token: string, options: Options) {
           console.error('发生未知错误，工作流终止。')
           retries++ // 增加重试计数器
           if (retries >= maxRetries) {
+            finishedCnt++
             process.exit(1) // 达到最大重试次数，终止工作流
           }
         }
@@ -113,9 +115,10 @@ export async function doAttendanceForAccount(token: string, options: Options) {
       // 多个角色之间的延时
       await setTimeout(3000)
     }
+    finishedCnt++
   }))
-  if (successAttendance !== 0)
-    combineMessage(`成功签到${successAttendance}个角色`)
+  if (successCnt !== 0)
+    combineMessage(`成功签到${successCnt}个角色`)
 
   /** 登岛检票已经被风控 所以不提供这个功能了 */
   // addMessage(`# 森空岛每日签到 \n\n> ${new Intl.DateTimeFormat('zh-CN', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Asia/Shanghai' }).format(new Date())}`)
